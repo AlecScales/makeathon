@@ -5,6 +5,7 @@ from time import sleep, sleep_us
 turn_speed = 50      # Speed percentage when steering away from an edge
 speed = 100
 turn_time = 0.05
+wallturntime = 0.1
 
 # --- Pin Pinout Configurations ---
 left_in1 = Pin(2, Pin.OUT)
@@ -44,7 +45,7 @@ def read_distance_cm(trigger, echo):
     trigger.value(0)
     pulse_us = time_pulse_us(echo, 1, 30000)
     if pulse_us < 0:
-        return None
+        return 9999999999
     return pulse_us * 0.0343 / 2
 
 # --- Direction Control Functions ---
@@ -90,6 +91,7 @@ set_speed_percent(right_enable, speed)
 forward()
 try:
     while True:
+        forward()
         led.toggle()
         
         # Read digital line sensors
@@ -111,7 +113,20 @@ try:
             set_speed_percent(right_enable, speed)
         
         distance_1 = read_distance_cm(trigger_1, echo_1)
+        distance_2 = read_distance_cm(trigger_2, echo_2)
         
+
+        if distance_1 < 12 and distance_2 < 12:
+            stop()
+            rightonly()
+            try:
+                while notLine:
+                    if left == 1:
+                        sleep(wallturntime)
+                        notLine = False
+            except KeyboardInterrupt:
+                stop()
+
         sleep_us(100)
 
 except KeyboardInterrupt:
