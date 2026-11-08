@@ -1,11 +1,14 @@
 from machine import Pin, time_pulse_us, PWM
-from time import sleep, sleep_us
+from time import sleep, sleep_us, ticks_ms, ticks_diff
 
 # --- Configuration Settings ---
-turn_speed = 50      # Speed percentage when steering away from an edge
-speed = 100
-turn_time = 0.05
+turn_speed = 0      # Speed percentage when steering
+speed = 75          # Base speed
+turn_time = 0.1
 wallturntime = 0.1
+
+left_trim = 1.0      
+right_trim = 0.8     
 
 # --- Pin Pinout Configurations ---
 left_in1 = Pin(2, Pin.OUT)
@@ -23,18 +26,17 @@ left_ir = Pin(16, Pin.IN)
 right_ir = Pin(17, Pin.IN)
 
 trigger_1 = Pin(10, Pin.OUT)
-echo_1 = Pin(11, Pin.IN)  # Divided Echo only.
+echo_1 = Pin(11, Pin.IN)
 
 trigger_2 = Pin(12, Pin.OUT)
-echo_2 = Pin(13, Pin.IN)  # Divided Echo only.
+echo_2 = Pin(13, Pin.IN)
 
-# Initialize ultrasonic triggers to LOW
 trigger_1.value(0)
 trigger_2.value(0)
 
-def set_speed_percent(enable_pwm, percent):
-    percent = max(0, min(100, percent))
-    duty = int(percent * 65535 / 100)
+def set_speed_percent(enable_pwm, percent, trim=1.0):
+    adjusted_percent = max(0, min(100, percent * trim))
+    duty = int(adjusted_percent * 65535 / 100)
     enable_pwm.duty_u16(duty)
 
 def read_distance_cm(trigger, echo):
@@ -56,25 +58,21 @@ def forward():
     right_in4.value(0)
 
 def reverse():
-    left_in1.value(0)  # Inverted from forward
+    left_in1.value(0)  
     left_in2.value(1)
-    right_in3.value(0)  # Inverted from forward
+    right_in3.value(0)  
     right_in4.value(1)
 
-def leftonly():
+def pivot_right():
     left_in1.value(1)
     left_in2.value(0)
-
-def rightonly():
-    right_in3.value(1)
-    right_in4.value(0)
-
-def leftstop():
-    left_in1.value(0)
-    left_in2.value(0)
-
-def rightstop():
     right_in3.value(0)
+    right_in4.value(1)
+
+def pivot_left():
+    left_in1.value(0)
+    left_in2.value(1)
+    right_in3.value(1)
     right_in4.value(0)
 
 def stop():
@@ -83,48 +81,50 @@ def stop():
     right_in3.value(0)
     right_in4.value(0)
 
-
-
-
-set_speed_percent(left_enable, speed)
-set_speed_percent(right_enable, speed)
+# Initialize speeds with trim
+set_speed_percent(left_enable, speed, left_trim)
+set_speed_percent(right_enable, speed, right_trim)
 forward()
+
 try:
     while True:
-        forward()
         led.toggle()
-        
-        # Read digital line sensors
         left = left_ir.value()
         right = right_ir.value()
         
-        if left == 1 and right == 0:
-            set_speed_percent(left_enable, turn_speed)
+        # --- Standard Line Following Logic ---
+        if right == 1 and left == 0:
+            set_speed_percent(right_enable, turn_speed, right_trim)
             sleep(turn_time)
-            set_speed_percent(left_enable, speed)
-            
-        elif right == 1 and left == 0:
-            set_speed_percent(right_enable, turn_speed)
+            pivot_right()
+            set_speed_percent(right_enable, speed, right_trim)
+                
+        elif left == 1 and right == 0:
+            set_speed_percent(left_enable, turn_speed, left_trim)
             sleep(turn_time)
-            set_speed_percent(right_enable, speed)
+            pivot_left()
+            set_speed_percent(left_enable, speed, left_trim)
             
         else:
-            set_speed_percent(left_enable, speed)
-            set_speed_percent(right_enable, speed)
+            set_speed_percent(left_enable, speed, left_trim)
+            set_speed_percent(right_enable, speed, right_trim)
+            forward()
         
+        # --- Obstacle Avoidance ---
         distance_1 = read_distance_cm(trigger_1, echo_1)
         distance_2 = read_distance_cm(trigger_2, echo_2)
         
+        # if distance_1 < 12 and distance_2 < 12:
+        #     stop()
+        #     pivot_right()
+        #     while left_ir.value() != 1:
+        #         sleep(0.01)
+        #     if wallturntime > 0:
+        #         sleep(wallturntime)
 
-        if distance_1 < 12 and distance_2 < 12:
-            stop()
-            rightonly()
-            while left != 1:
-                left = left_ir.value()
-            sleep(wallturntime)
-            stop()
-
-        sleep_us(100)
+        # Brief delay per loop iteration
+        stop()
+        sleep_us(1000)
 
 except KeyboardInterrupt:
     stop()

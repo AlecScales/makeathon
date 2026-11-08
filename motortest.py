@@ -15,8 +15,6 @@ right_in4 = Pin(7, Pin.OUT)
 left_enable.duty_u16(60000)
 right_enable.duty_u16(60000)
 
-left_in1.value(1)
-left_in2.value(0)
 right_in3.value(1)
 right_in4.value(0)
 
